@@ -210,7 +210,9 @@ export function spawnTraffic(state, city) {
   if (!Array.isArray(state.peds)) state.peds = [];
   const rng = rngOf(city);
   const cam = cameraOf(state);
-  const aiCars = state.vehicles.filter((v) => v.driver === 'ped' && !v.wrecked).length;
+  // Race cars (driver 'ped' with racer: true) are driven by missions.js,
+  // not by ambient traffic: they must not count toward the ambient total.
+  const aiCars = state.vehicles.filter((v) => v.driver === 'ped' && !v.wrecked && !v.racer).length;
   for (let i = aiCars; i < TARGET_AI_CARS; i += 1) {
     state.vehicles.push(makeAiCar(state, city, rng));
   }
@@ -244,7 +246,8 @@ export function updateTraffic(state, city, dt) {
   }
 
   // --- AI cars ---------------------------------------------------------------
-  const cars = (state.vehicles || []).filter((v) => v.driver === 'ped' && !v.wrecked);
+  // Race cars are owned by missions.js (racer: true) and skipped here.
+  const cars = (state.vehicles || []).filter((v) => v.driver === 'ped' && !v.wrecked && !v.racer);
   for (const car of cars) {
     if (typeof car.cruiseSpeed !== 'number') car.cruiseSpeed = 120;
     if (typeof car.turnCooldown !== 'number') car.turnCooldown = 0;
@@ -319,7 +322,7 @@ export function updateTraffic(state, city, dt) {
   }
 
   // Keep the AI car count steady near the camera (not in shot mode).
-  const liveCars = (state.vehicles || []).filter((v) => v.driver === 'ped' && !v.wrecked);
+  const liveCars = (state.vehicles || []).filter((v) => v.driver === 'ped' && !v.wrecked && !v.racer);
   if (!shotMode && liveCars.length < TARGET_AI_CARS) {
     for (let i = liveCars.length; i < TARGET_AI_CARS; i += 1) {
       const car = makeAiCar(state, city, rng);
@@ -394,16 +397,27 @@ export function updateTraffic(state, city, dt) {
       }
     } else {
       // Strolling: change direction now and then, turn away from walls.
+      // In shot mode the scene is staged: hold the angle and reset the
+      // timer to a fixed value, so the frame is identical every time.
       ped.timer -= step;
       if (ped.timer <= 0) {
-        ped.angle += (rng() - 0.5) * 2.2;
-        ped.timer = 2 + rng() * 3;
+        if (shotMode) {
+          ped.timer = 2;
+        } else {
+          ped.angle += (rng() - 0.5) * 2.2;
+          ped.timer = 2 + rng() * 3;
+        }
       }
       const nx = ped.x + Math.cos(ped.angle) * ped.speed * step;
       const ny = ped.y + Math.sin(ped.angle) * ped.speed * step;
       if (isBlockedAt(city, nx, ny, 10)) {
-        ped.angle += Math.PI / 2 + (rng() - 0.5) * 0.8;
-        ped.timer = 0.5 + rng();
+        if (shotMode) {
+          ped.angle += Math.PI / 2;
+          ped.timer = 0.5;
+        } else {
+          ped.angle += Math.PI / 2 + (rng() - 0.5) * 0.8;
+          ped.timer = 0.5 + rng();
+        }
       }
     }
 

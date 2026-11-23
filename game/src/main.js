@@ -229,6 +229,16 @@ function step(state, city, dt) {
   // Death is GTA-style and handled by the police system (hospital respawn
   // on wasted, station respawn on busted) — never a game-over screen.
   updateCamera(state, dt);
+  // Screen shake from explosions (explosions.js sets state.shake). The
+  // jitter is a deterministic function of state.time, so a shot staged
+  // with a shake still renders the same frame every time — never random.
+  if (state.shake && state.shake.t > 0) {
+    const s = state.shake;
+    s.t = Math.max(0, s.t - dt);
+    const amp = s.mag * (s.t / 0.5);
+    state.camera.x += Math.sin(state.time * 47) * amp;
+    state.camera.y += Math.cos(state.time * 61) * amp;
+  }
 }
 
 async function boot() {

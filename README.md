@@ -4,7 +4,7 @@
 [![rank](https://make.fun/badge/gta6-01/jsjxdbc/porto-luz/rank.svg)](https://make.fun/bounty/gta6-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 [![reward](https://make.fun/badge/gta6-01/jsjxdbc/porto-luz/reward.svg)](https://make.fun/bounty/gta6-01?utm_source=github&utm_medium=readme&utm_campaign=gta6-01)
 
-Porto Luz is a 2D top-down open-world crime game in the spirit of GTA 6. You play Danny Reyes, a wheelman building a name in the sun-soaked coastal city of Porto Luz: steal cars, outrun the police, take jobs from fixer Marisol Vega, and climb from first wheels to the big one. Five missions, a living city with traffic and pedestrians, a 0–5 star wanted system, combat, a day/night cycle, a HUD with minimap, and a save system — all playable offline in a desktop browser from static files, no network needed.
+Porto Luz is a 2D top-down open-world crime game in the spirit of GTA 6. You play Danny Reyes, a wheelman building a name in the sun-soaked coastal city of Porto Luz: steal cars, outrun the police, take jobs from fixer Marisol Vega, and climb from first wheels to the big one. Six story missions plus a repeatable street race, a living city with traffic and pedestrians, a 0–5 star wanted system, combat with car explosions and screen shake, a day/night cycle with sunset and neon-night lighting, a HUD with minimap, and a save system — all playable offline in a desktop browser from static files, no network needed.
 
 ## Run it
 

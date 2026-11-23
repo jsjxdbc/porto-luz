@@ -160,6 +160,19 @@ export function render(ctx, state, city) {
     }
   }
 
+  // Skid marks (staged by shots.js): dark rubber trails on the asphalt.
+  if (state.skids && state.skids.length) {
+    ctx.strokeStyle = 'rgba(18, 18, 22, 0.5)';
+    ctx.lineWidth = 5;
+    ctx.lineCap = 'round';
+    for (const s of state.skids) {
+      ctx.beginPath();
+      ctx.moveTo(s.x1, s.y1);
+      ctx.lineTo(s.x2, s.y2);
+      ctx.stroke();
+    }
+  }
+
   // Buildings: shadow, body, roof.
   for (const b of city.buildings) {
     if (!inView(b.x, b.y, b.w, b.h)) continue;
@@ -189,9 +202,10 @@ export function render(ctx, state, city) {
     ctx.fill();
   }
 
-  // Vehicles.
+  // Vehicles (wet-road reflection first, so the glow sits under the car).
   for (const v of state.vehicles) {
     if (!inView(v.x - 40, v.y - 40, 80, 80)) continue;
+    if (reflectAtNight(state.clock)) drawWetReflection(ctx, v.x, v.y, v.angle, v.color, v.kind);
     drawVehicleBody(ctx, v.x, v.y, v.angle, v.color, v.kind, v.driver === 'player');
   }
 
@@ -205,6 +219,7 @@ export function render(ctx, state, city) {
   for (const cop of state.police) {
     if (!inView(cop.x - 40, cop.y - 40, 80, 80)) continue;
     if (cop.kind === 'car') {
+      if (reflectAtNight(state.clock)) drawWetReflection(ctx, cop.x, cop.y, cop.angle, '#e8e8e8', 'car');
       drawVehicleBody(ctx, cop.x, cop.y, cop.angle, '#e8e8e8', 'car', false);
       ctx.save();
       ctx.translate(cop.x, cop.y);
@@ -226,9 +241,63 @@ export function render(ctx, state, city) {
     }
   }
 
+  // Muzzle flashes (staged by shots.js): a bright four-point star where a
+  // gun just fired.
+  for (const f of state.flashes || []) {
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.strokeStyle = 'rgba(255, 240, 160, 0.95)';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    for (const a of [0, Math.PI / 4, Math.PI / 2, (3 * Math.PI) / 4]) {
+      ctx.beginPath();
+      ctx.moveTo(Math.cos(a) * -11, Math.sin(a) * -11);
+      ctx.lineTo(Math.cos(a) * 11, Math.sin(a) * 11);
+      ctx.stroke();
+    }
+    ctx.fillStyle = 'rgba(255, 250, 210, 0.95)';
+    ctx.beginPath();
+    ctx.arc(0, 0, 5, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
   // The player on foot (in a car, the ring on the car marks them).
   const p = state.player;
   if (p.onFoot) drawPerson(ctx, p.x, p.y, p.angle, COLORS.player, 13);
+
+  // Staged explosions (shots.js): a fireball core, a hot glow and fixed
+  // smoke puffs — all fixed coordinates, so the frame is deterministic.
+  for (const ex of state.explosions || []) {
+    const glow = ctx.createRadialGradient(ex.x, ex.y, 4, ex.x, ex.y, ex.r * 1.7);
+    glow.addColorStop(0, 'rgba(255, 220, 120, 0.55)');
+    glow.addColorStop(0.5, 'rgba(255, 120, 30, 0.28)');
+    glow.addColorStop(1, 'rgba(255, 80, 20, 0)');
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(ex.x, ex.y, ex.r * 1.7, 0, Math.PI * 2);
+    ctx.fill();
+    const core = ctx.createRadialGradient(ex.x, ex.y, 2, ex.x, ex.y, ex.r);
+    core.addColorStop(0, '#fff6c8');
+    core.addColorStop(0.45, '#ffb03a');
+    core.addColorStop(0.8, '#e85a1e');
+    core.addColorStop(1, 'rgba(160, 40, 10, 0.85)');
+    ctx.fillStyle = core;
+    ctx.beginPath();
+    ctx.arc(ex.x, ex.y, ex.r, 0, Math.PI * 2);
+    ctx.fill();
+    // Smoke: five puffs at fixed polar offsets around the fireball.
+    for (let i = 0; i < 5; i += 1) {
+      const a = i * 2.4 + 0.6;
+      const d = ex.r * 0.95;
+      const sx = ex.x + Math.cos(a) * d;
+      const sy = ex.y + Math.sin(a) * d - ex.r * 0.35;
+      ctx.fillStyle = 'rgba(38, 38, 44, 0.5)';
+      ctx.beginPath();
+      ctx.arc(sx, sy, ex.r * 0.34, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
 
   // Particles.
   for (const pt of state.particles) {
@@ -242,19 +311,88 @@ export function render(ctx, state, city) {
 
   ctx.restore();
 
-  // Night tint.
-  const night = nightAlpha(state.clock);
-  if (night > 0) {
-    ctx.fillStyle = `rgba(10, 16, 48, ${night})`;
+  // Time-of-day lighting: a warm sunset wash with a low sun glow at
+  // golden hour, a violet wash at dusk, deep blue at night. Day scenes
+  // (07:00–17:00) are untouched.
+  const light = lightingFor(state.clock);
+  if (light.tint) {
+    ctx.fillStyle = light.tint;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  }
+  if (light.glow) {
+    const g = ctx.createRadialGradient(light.glow.x, light.glow.y, 10, light.glow.x, light.glow.y, light.glow.r);
+    g.addColorStop(0, light.glow.color);
+    g.addColorStop(1, 'rgba(255, 140, 40, 0)');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  }
+
+  // Neon spill (night scenes, staged by shots.js): drawn over the tint so
+  // the colour glows instead of being dulled by it.
+  if (state.neon && state.neon.length) {
+    ctx.save();
+    ctx.translate(CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2);
+    ctx.scale(camera.zoom, camera.zoom);
+    ctx.translate(-camera.x, -camera.y);
+    for (const n of state.neon) {
+      const [r, g, b] = n.rgb;
+      const grad = ctx.createRadialGradient(n.x, n.y, 4, n.x, n.y, n.r);
+      grad.addColorStop(0, `rgba(${r}, ${g}, ${b}, 0.55)`);
+      grad.addColorStop(1, `rgba(${r}, ${g}, ${b}, 0)`);
+      ctx.fillStyle = grad;
+      ctx.beginPath();
+      ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.restore();
   }
   // The HUD (hud.js) is drawn by main.js after this returns.
 }
 
-/** 0 at day, up to 0.32 deep at night. */
-function nightAlpha(clock) {
+/** Wet-road reflections under cars: only once it is properly dark. */
+function reflectAtNight(clock) {
   const h = (clock / 3600) % 24;
-  if (h >= 7 && h < 18) return 0;
-  if (h >= 19 || h < 6) return 0.32;
-  return h < 7 ? 0.32 * (7 - h) : 0.32 * (h - 18);
+  return h >= 19 || h < 6;
+}
+
+/** A soft coloured sheen under a car, as if the wet asphalt mirrors it. */
+function drawWetReflection(ctx, x, y, angle, color, kind) {
+  const size = VEHICLE_SIZE[kind] || VEHICLE_SIZE.car;
+  ctx.save();
+  ctx.translate(x, y + 20);
+  ctx.rotate(angle);
+  ctx.fillStyle = color;
+  ctx.globalAlpha = 0.16;
+  ctx.beginPath();
+  ctx.ellipse(0, 0, size.l * 0.6, size.w * 0.45, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.globalAlpha = 0.1;
+  ctx.beginPath();
+  ctx.ellipse(0, 6, size.l * 0.42, size.w * 0.3, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+  ctx.globalAlpha = 1;
+}
+
+/**
+ * Lighting for a clock time (seconds since midnight): a warm sunset wash
+ * peaking at 18:15 with a low sun glow, a violet dusk wash, deep blue
+ * night. Day (07:00–17:00) gets no overlay at all.
+ */
+function lightingFor(clock) {
+  const h = (clock / 3600) % 24;
+  if (h >= 7 && h < 17) return { tint: null, glow: null };
+  if (h >= 17 && h < 19) {
+    const peak = 18.25; // 18:15, the strongest sunset
+    const a = 0.04 + 0.16 * Math.max(0, 1 - Math.abs(h - peak));
+    return {
+      tint: `rgba(255, 110, 30, ${a.toFixed(3)})`,
+      glow: { x: 1080, y: 110, r: 320, color: 'rgba(255, 170, 60, 0.5)' },
+    };
+  }
+  if (h >= 19 && h < 20) {
+    return { tint: `rgba(70, 50, 130, ${(0.12 * (20 - h)).toFixed(3)})`, glow: null };
+  }
+  if (h >= 20 || h < 6) return { tint: 'rgba(10, 16, 48, 0.34)', glow: null };
+  return { tint: `rgba(10, 16, 48, ${(0.34 * (7 - h)).toFixed(3)})`, glow: null };
 }

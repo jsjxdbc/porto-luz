@@ -15,6 +15,7 @@
 import * as world from './world.js';
 import { addWanted } from './police.js';
 import { addMessage } from './state.js';
+import { explodeVehicle } from './explosions.js';
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from './config.js';
 
 export const WORLD_W = 3200;
@@ -88,15 +89,9 @@ function hurtVehicle(v, damage, state) {
   if (typeof v.health !== 'number') v.health = 100;
   v.health -= damage;
   if (v.health <= 0) {
-    v.wrecked = true;
-    v.speed = 0;
-    const p = state.player;
-    if (v.driver === 'player' && p) {
-      p.inVehicle = null;
-      p.onFoot = true;
-      p.speed = 0;
-    }
-    v.driver = null;
+    // A killed car detonates (fireball, blast damage, boom); the blast
+    // also throws the player clear when it was their car.
+    explodeVehicle(state, v);
   }
 }
 

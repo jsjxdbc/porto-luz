@@ -20,6 +20,7 @@
 import * as world from './world.js';
 import { addWanted } from './police.js';
 import { addMessage } from './state.js';
+import { explodeVehicle } from './explosions.js';
 
 export const WORLD_W = 3200;
 export const WORLD_H = 3200;
@@ -485,7 +486,7 @@ export function updateVehicles(state, city, dt, input) {
       }
     }
 
-    if (vehicle.health <= 0) wreckVehicle(state, vehicle);
+    if (vehicle.health <= 0) explodeVehicle(state, vehicle);
 
     // Keep the player glued to the car (main.js does the same next step).
     if (p.inVehicle === vehicle.id || p.inVehicle === vehicle) {
@@ -498,5 +499,14 @@ export function updateVehicles(state, city, dt, input) {
   } else if (vehicle && vehicle.wrecked
     && (p.inVehicle === vehicle.id || p.inVehicle === vehicle)) {
     wreckVehicle(state, vehicle);
+  }
+
+  // Any car whose health hit zero this frame — rammed in a pile-up, shot
+  // while parked — detonates. (The driven car is covered above; bullets
+  // detonate through combat.js; this sweep catches the rest.)
+  for (const v of state.vehicles || []) {
+    if (!v.wrecked && typeof v.health === 'number' && v.health <= 0) {
+      explodeVehicle(state, v);
+    }
   }
 }

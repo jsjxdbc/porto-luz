@@ -1,19 +1,46 @@
-// Porto Luz — screenshot scenes behind ?shot=start|chase|mission|street.
+// Porto Luz — screenshot scenes behind ?shot=start|chase|mission|street|heist|night.
 // Each scene stages a fixed, deterministic moment of the game (fixed
 // positions, fixed clock, fixed wanted level) so the same seed always
 // gives the same frame. The one step boot runs after staging only nudges
 // things; police are staged at exactly the counts the wanted level calls
 // for, and auto-seeding is switched off, so nothing random is added.
+// Visual dressing (explosions, skid marks, muzzle flashes, neon pools) is
+// staged as fixed coordinates on the state; render.js draws it.
 //
 //   start   — the title screen over the city.
-//   chase   — the cover: Danny fleeing in a sports car at 3 stars, police
-//             cruisers behind him, HUD, minimap and mission objective live.
+//   chase   — the cover: Danny fleeing in a sports car at 5 stars, four
+//             cruisers behind him, a fireball in the road, sunset light.
 //   mission — The Getaway in progress: driving north to the package with
 //             a 2-star tail and the waypoint marker ahead.
 //   street  — on foot downtown: parked cars, pedestrians, traffic, the
 //             first job waiting on the HUD.
+//   heist   — The Big One: the getaway from the bank at 4 stars, dusk,
+//             a blast at the bank doors and an officer firing.
+//   night   — a neon-lit night cruise: sports car on a wet downtown
+//             street, pink and cyan light spilling on the asphalt.
 
 import { addMessage } from './state.js';
+
+/** A staged explosion: {x, y, r} — render.js draws the fireball. */
+function explosion(x, y, r) {
+  return { x, y, r };
+}
+
+/** Deterministic smoke-and-fire particles frozen around a blast. */
+function blastSmoke(x, y, r) {
+  const spots = [
+    [0, -r * 0.5, 16, 'rgba(255, 200, 90, 0.95)'],
+    [-r * 0.4, r * 0.3, 13, 'rgba(255, 140, 40, 0.95)'],
+    [r * 0.45, r * 0.2, 12, 'rgba(255, 90, 20, 0.9)'],
+    [-r * 0.7, -r * 0.7, 15, 'rgba(45, 45, 52, 0.55)'],
+    [r * 0.7, -r * 0.6, 14, 'rgba(45, 45, 52, 0.55)'],
+    [0, -r * 1.1, 17, 'rgba(45, 45, 52, 0.5)'],
+  ];
+  return spots.map(([dx, dy, size, color]) => ({
+    x: x + dx, y: y + dy, vx: 0, vy: -12,
+    life: 1.1, maxLife: 1.1, color, size,
+  }));
+}
 
 /** The mission object shape updateMissions expects (all runtime fields). */
 function stagedMission(fields) {
@@ -75,21 +102,23 @@ export function setupShot(state, city, shot) {
   }
 
   if (shot === 'chase') {
-    // Cover: 3 wanted stars call for 2 cruisers + 2 officers (police.js's
-    // table); both are staged, so the step adds none of its own.
+    // Cover: 5 wanted stars call for 4 cruisers + 4 officers (police.js's
+    // table); all are staged, so the step adds none of its own. Sunset at
+    // 18:15, a fireball in the road ahead, skid trails behind the car.
     state.flags.started = true;
-    state.time = 150; // 10:30: the clock is START_CLOCK + time * TIME_SCALE
+    state.time = 615; // 18:15: the clock is START_CLOCK + time * TIME_SCALE
     p.cash = 850;
     p.health = 100;
     p.armor = 25;
     p.weapon = 'pistol';
     p.ammo = 24;
-    p.wanted = 3;
+    p.wanted = 5;
     const ride = car('shot-car', 1200, 1400, 0, 380, '#e74c3c', 'sports', 'player');
     state.vehicles = [
       ride,
       car('shot-ai-1', 1520, 1400, 0, 120, '#2e6dc2', 'sedan', 'ped'),
       car('shot-ai-2', 1740, 1364, 0, 110, '#f7c948', 'taxi', 'ped'),
+      car('shot-ai-3', 1900, 1364, 0, 130, '#9b59b6', 'sedan', 'ped'),
       car('shot-parked-1', 1000, 1330, 0, 0, '#7d8a96', 'sedan', null),
     ];
     p.inVehicle = 'shot-car';
@@ -100,20 +129,36 @@ export function setupShot(state, city, shot) {
     p.speed = ride.speed;
     state.peds = [
       ped('shot-ped-1', 1150, 1400, 0, '#7a4a8a', 1300, 1400),
-      ped('shot-ped-2', 1350, 1400, Math.PI, '#4a8a5a', 1200, 1400),
+      ped('shot-ped-2', 1440, 1362, Math.PI, '#4a8a5a', 1200, 1400),
     ];
     state.police = [
       copCar('shot-cop-1', 1060, 1400, 0, 330),
       copCar('shot-cop-2', 900, 1400, 0, 310),
-      officer('shot-off-1', 300, 300),
-      officer('shot-off-2', 2900, 400),
+      copCar('shot-cop-3', 1020, 1330, 0.15, 320),
+      copCar('shot-cop-4', 860, 1330, -0.15, 300),
+      officer('shot-off-1', 1150, 1330),
+      officer('shot-off-2', 1250, 1470),
+      officer('shot-off-3', 700, 1400),
+      officer('shot-off-4', 1600, 1364),
     ];
+    // A blast in the road just ahead of the car, with smoke and skid
+    // trails behind it — the blockbuster frame.
+    state.explosions = [explosion(1310, 1400, 42)];
+    state.particles = blastSmoke(1310, 1400, 42);
+    state.skids = [
+      { x1: 1080, y1: 1390, x2: 1130, y2: 1395 },
+      { x1: 1130, y1: 1395, x2: 1180, y2: 1398 },
+      { x1: 1080, y1: 1410, x2: 1130, y2: 1406 },
+      { x1: 1130, y1: 1406, x2: 1180, y2: 1402 },
+    ];
+    state.flashes = [];
+    state.neon = [];
     state.mission = stagedMission({
       id: 'getaway', stage: 1, title: 'The Getaway',
       objective: 'Deliver the package to the drop-off',
       target: { x: 600, y: 600 },
     });
-    addMessage(state, 'Marisol: Lose them, Danny!', 6);
+    addMessage(state, 'Marisol: Five stars! Lose them, Danny!', 6);
     return;
   }
 
@@ -193,6 +238,114 @@ export function setupShot(state, city, shot) {
       target: { x: 1000, y: 1400 },
     });
     addMessage(state, "Marisol: Danny, the pier. Don't keep me waiting.", 6);
+    return;
+  }
+
+  if (shot === 'heist') {
+    // The Big One, escape leg: Danny fleeing west from the Luz City Bank
+    // (1400, 1000) toward the safehouse at dusk, 18:45. 4 stars call for
+    // 3 cruisers + 3 officers; a blast still burns at the bank doors and
+    // an officer by the bank is firing.
+    state.flags.started = true;
+    state.time = 645; // 18:45: dusk light
+    p.cash = 2750;
+    p.health = 100;
+    p.armor = 50;
+    p.weapon = 'pistol';
+    p.ammo = 30;
+    p.wanted = 4;
+    const ride = car('shot-car', 1150, 1000, Math.PI, 380, '#5b2a86', 'sports', 'player');
+    state.vehicles = [
+      ride,
+      car('shot-ai-1', 900, 1000, Math.PI, 120, '#f7c948', 'taxi', 'ped'),
+      car('shot-ai-2', 1600, 960, Math.PI, 110, '#2e6dc2', 'sedan', 'ped'),
+      car('shot-parked-1', 700, 1070, 0, 0, '#7d8a96', 'sedan', null),
+    ];
+    p.inVehicle = 'shot-car';
+    p.onFoot = false;
+    p.x = ride.x;
+    p.y = ride.y;
+    p.angle = ride.angle;
+    p.speed = ride.speed;
+    state.peds = [
+      ped('shot-ped-1', 1450, 1040, 0, '#7a4a8a', 1600, 1100),
+      ped('shot-ped-2', 1470, 960, Math.PI, '#4a8a5a', 1600, 900),
+    ];
+    state.police = [
+      copCar('shot-cop-1', 1350, 1000, Math.PI, 330),
+      copCar('shot-cop-2', 1500, 1000, Math.PI, 310),
+      copCar('shot-cop-3', 1300, 1070, Math.PI + 0.3, 300),
+      officer('shot-off-1', 1380, 950),
+      officer('shot-off-2', 1500, 1060),
+      officer('shot-off-3', 1100, 1060),
+    ];
+    state.explosions = [explosion(1420, 990, 38)];
+    state.particles = blastSmoke(1420, 990, 38);
+    state.skids = [
+      { x1: 1250, y1: 992, x2: 1200, y2: 996 },
+      { x1: 1200, y1: 996, x2: 1175, y2: 998 },
+      { x1: 1250, y1: 1008, x2: 1200, y2: 1004 },
+      { x1: 1200, y1: 1004, x2: 1175, y2: 1002 },
+    ];
+    state.flashes = [{ x: 1372, y: 942 }];
+    state.neon = [];
+    state.mission = stagedMission({
+      id: 'big-one', stage: 3, title: 'The Big One',
+      objective: 'Lose the heat — escape to the safehouse',
+      target: { x: 600, y: 600 },
+    });
+    addMessage(state, 'Marisol: Four stars! Run — the safehouse is the only quiet place left.', 6);
+    return;
+  }
+
+  if (shot === 'night') {
+    // Neon cruise at 22:00: Danny's cyan sports car rolling down a wet
+    // downtown street, pink and cyan light spilling on the asphalt, the
+    // taxi job waiting on the HUD. No heat — just the city at night.
+    state.flags.started = true;
+    state.time = 840; // 22:00: full night, neon on
+    p.cash = 1200;
+    p.health = 100;
+    p.armor = 0;
+    p.weapon = 'fists';
+    p.ammo = 0;
+    p.wanted = 0;
+    const ride = car('shot-car', 1400, 1400, 0, 200, '#22d3ee', 'sports', 'player');
+    state.vehicles = [
+      ride,
+      car('shot-parked-1', 1150, 1330, 0, 0, '#c0392b', 'sedan', null),
+      car('shot-parked-2', 1700, 1470, Math.PI, 0, '#7a4a8a', 'sedan', null),
+      car('shot-ai-1', 1800, 1400, 0, 110, '#f7c948', 'taxi', 'ped'),
+      car('shot-ai-2', 1000, 1364, Math.PI, 100, '#16a085', 'sedan', 'ped'),
+    ];
+    p.inVehicle = 'shot-car';
+    p.onFoot = false;
+    p.x = ride.x;
+    p.y = ride.y;
+    p.angle = ride.angle;
+    p.speed = ride.speed;
+    state.peds = [
+      ped('shot-ped-1', 1300, 1330, 0, '#7a4a8a', 1300, 1500),
+      ped('shot-ped-2', 1500, 1470, Math.PI, '#4a8a5a', 1500, 1300),
+      ped('shot-ped-3', 1600, 1330, 0, '#8a6a4a', 1700, 1330),
+    ];
+    state.police = [];
+    state.explosions = [];
+    state.particles = [];
+    state.skids = [];
+    state.flashes = [];
+    state.neon = [
+      { x: 1250, y: 1400, r: 90, rgb: [255, 46, 136] },
+      { x: 1650, y: 1400, r: 90, rgb: [34, 211, 238] },
+      { x: 1400, y: 1330, r: 70, rgb: [168, 85, 247] },
+      { x: 1000, y: 1400, r: 70, rgb: [255, 46, 136] },
+    ];
+    state.mission = stagedMission({
+      id: 'taxi', stage: 0, title: 'Taxi Fare',
+      objective: 'Pick up the passenger',
+      target: { x: 1400, y: 1100 },
+    });
+    addMessage(state, 'Marisol: The city never sleeps, Danny.', 6);
     return;
   }
 

@@ -129,6 +129,13 @@ export function createAudio() {
     sirenNodes = { osc, lfo };
   }
 
+  function explosion() {
+    // A low boom: a long low-frequency noise burst plus a falling tone.
+    noiseBurst(0.7, 140, 0.9);
+    noiseBurst(0.4, 420, 0.4, 0.02);
+    blip(130, 28, 0.7, 'sine', 0.7);
+  }
+
   function shoot() {
     noiseBurst(0.12, 1800, 0.5);
     blip(190, 55, 0.1, 'square', 0.22);
@@ -201,6 +208,7 @@ export function createAudio() {
     pickup,
     cash,
     missionDone,
+    explosion,
     music: { start: musicStart, stop: musicStop },
     setMuted,
   };

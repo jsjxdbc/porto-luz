@@ -17,6 +17,7 @@
 // unless another system kills the player without this module running.
 import * as world from './world.js';
 import { addMessage } from './state.js';
+import { explodePoliceCar } from './explosions.js';
 
 export const WORLD_W = 3200;
 export const WORLD_H = 3200;
@@ -331,6 +332,7 @@ export function updatePolice(state, city, dt) {
     const cop = state.police[i];
     if (typeof cop.health !== 'number') cop.health = cop.kind === 'car' ? 120 : 60;
     if (cop.health <= 0) {
+      if (cop.kind === 'car') explodePoliceCar(state, cop);
       state.police.splice(i, 1);
       continue;
     }
